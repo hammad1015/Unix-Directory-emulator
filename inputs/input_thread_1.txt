@@ -1,0 +1,5 @@
+ls
+cd dir1
+pwd
+touch file11
+tree
