@@ -353,17 +353,7 @@ switch = {
 if __name__ == '__main__':
 
     init()
-    """
-    n_threads = 1
-
-    threads = [
-        threading.Thread(target=foo, args=(id,))
-        for id in range(n_threads)
-    ]
-    for t in threads: t.start()
-    for t in threads: t.join()
-
-    """ 
+    
     while True:
             
         save()

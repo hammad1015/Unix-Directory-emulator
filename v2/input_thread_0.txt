@@ -1,0 +1,5 @@
+touch file1
+
+wrt file1 this-is-data-for-file1
+
+tree

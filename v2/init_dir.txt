@@ -1,0 +1,16 @@
+touch file
+
+mkdir dir1
+mkdir dir2
+mkdir dir3
+
+cd dir1
+touch file11
+
+cd ./dir2
+touch file21
+touch file22
+
+cd ~
+
+tree

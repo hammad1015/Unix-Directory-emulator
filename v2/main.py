@@ -33,11 +33,13 @@ def init():
 
 # code for serialization and saving
 def save():
+
     SSD.seek(0)
     SSD.write(b' ' * maxMetaDataSize)
     SSD.seek(0)
     SSD.write(pickle.dumps(metaData))
     SSD.seek(maxMetaDataSize)
+
 
 
 
@@ -177,18 +179,12 @@ def foo(id):
         return ''
 
     def tree():
-        # print('~', end= '')
-        # tree_(dir_(pwd, '~'))
-        # print()
-
         return '~' + tree_(dir_(pwd, '~'))
 
     def path():
-        # print(path_(pwd))
         return path_(pwd)
 
     def lis():
-        # print(*list_(pwd), sep= '   ')
         return '   '.join(list_(pwd))
 
     def read(path, start= 0, size= -1):
@@ -198,10 +194,10 @@ def foo(id):
         
         f = File(path)
         f.seek(start)
-        print('\n>', f.read(size), end= '\n\n')
+        r = f'\n> {f.read(size)} \n'
         f.close()
 
-        return ''
+        return r
 
     def write(path, data, at= 0):
 
@@ -232,6 +228,7 @@ def foo(id):
 
         def __init__(self, path):
 
+
             tmp = path.rsplit('/', 1)
 
             self.name  = tmp[-1]
@@ -239,8 +236,6 @@ def foo(id):
             self.ptr   = 0
             self.data  = b''        
             self.ptrs  = self.dir[self.name]
-
-            # print(f'pointers {self.ptrs}')
 
             assert type(self.ptrs) is list, f'{self.name}, is not a file'
 
@@ -251,6 +246,7 @@ def foo(id):
 
                 SSD.seek(i)
                 self.data += SSD.read(s)
+
 
         def size(self):
             return len(self.data)
@@ -297,6 +293,7 @@ def foo(id):
             temp = []
 
             j = 0
+
             while data:
 
                 i = SSD.seek(0, 2)
@@ -345,7 +342,7 @@ def foo(id):
 
 
     r = ''
-    with open(f'inputs/input_thread_{id}.txt', 'r') as f:
+    with open(f'./input_thread_{id}.txt', 'r') as f:
         commands = f.readlines()
 
     for command in commands:
@@ -357,14 +354,15 @@ def foo(id):
         try:
             assert case in switch, f'{case}: command not found'                         # assertion statement
 
-            with lock: r += switch[case](*args) + '\n'; save()
+            with lock: r += switch[case](*args) + '\n'
         
         except (KeyboardInterrupt, EOFError): quit()
         except AssertionError as e          : print(e)
         #except Exception as e               : print(type(e), e, sep= '\n')
 
-    with open(f'outputs/output_thread_{id}.txt', 'w') as f:
-        # print(r) 
+    with lock: save()
+
+    with open(f'./output_thread_{id}.txt', 'w') as f: 
         f.write(r)
 
 
@@ -379,7 +377,7 @@ PS1 = '¥ '
 if __name__ == '__main__':
 
     init()
-    n_threads = 2
+    n_threads = int(input('enter the number of threads: '))
 
     threads = [
         threading.Thread(target=foo, args=(id,))
@@ -387,22 +385,3 @@ if __name__ == '__main__':
     ]
     for t in threads: t.start()
     for t in threads: t.join()
-
-""" 
-    while True:
-            
-        save()
-        stmt = input(PS1).split(' ')
-        case = stmt[0]
-        args = stmt[1:]
-
-        try:
-            assert case in switch, f'{case}: command not found'
-            switch[case](*args)
-        
-        except (KeyboardInterrupt, EOFError): quit()
-        except AssertionError as e          : print(e)
-        #except Exception as e               : print(type(e), e, sep= '\n')
-
-
-"""

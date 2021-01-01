@@ -1,0 +1,28 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+~
+   file1: [1024, 22]
+   file: []
+   dir1
+      file11: []
+   dir2
+      file21: []
+      file22: []
+   dir3
+
+
+> this-is-data-for-file1 
+
