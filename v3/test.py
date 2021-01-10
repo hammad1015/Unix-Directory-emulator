@@ -1,106 +1,108 @@
 import os
 import pickle
 import threading
-import socket as sc
+
+# import sys
+# import time
+
+# for i in range(10, 0, -1):
+#     sys.stdout.write(f'\r{ "="*i }>')
+#     sys.stdout.flush()
+#     time.sleep(0.5)
 
 
+class MetaData():
 
-# initialization code
-def init():
-    global maxMetaDataSize, metaData, SSD, voids, pwd, metas, lock
+    maxSize = 2**10
 
-    maxMetaDataSize = 2**10
+    # initialising directory structure
+    if not os.path.exists('sample.data'):
+        data = [
+            [],
+            {'.': None,}
+        ]
+        data[1]['~'] = data[1]
+        SSD = open('sample.data', 'wb+')
+        SSD.write(pickle.dumps(data))
+        SSD.close()
+
 
     # loading directory structure
-    if os.path.exists('sample.data'):
-        SSD      = open('sample.data', 'rb+')
-        metaData = pickle.loads(SSD.read(maxMetaDataSize))
-    else:
-        SSD      = open('sample.data', 'wb+')
-        metaData = {
-            0: [],
-            1: {
-                '.': None,
-            }
-        }
-        metaData[1]['~'] = metaData[1]
-        save()
+    SSD  = open('sample.data', 'rb+')
+    data = pickle.loads(SSD.read(maxSize))
         
-    # setting root and present working directory
-    voids = metaData[0]
-    pwd   = metaData[1]
-    metas = ('~', '.')
+    # setting root directory, storage holes and thread lock
+    holes = data[0]
+    root  = data[1]
+    metas = {'~', '.'}
     lock  = threading.Lock()
 
-# code for serialization and saving
-def save():
 
-    SSD.seek(0)
-    SSD.write(b' ' * maxMetaDataSize)
-    SSD.seek(0)
-    SSD.write(pickle.dumps(metaData))
-    SSD.seek(maxMetaDataSize)
+    @classmethod
+    def save(cls):
 
-
-
-
-
-# low level functions
-
-def list_(curr):
-    return [ name for name in curr if name not in metas ]
-
-def path_(curr):
+        cls.SSD.seek(0)
+        cls.SSD.write(b' ' * cls.maxSize)
+        cls.SSD.seek(0)
+        cls.SSD.write(pickle.dumps(cls.data))
+        cls.SSD.seek(cls.maxSize)
     
-    if curr['.'] is None: return '~'
 
-    for name in curr['.']:
-        if curr['.'][name] is curr:
-            return path_(curr['.']) + f'/{name}'
 
-def dir_(curr, path):
+class View():
 
-    for name in path.split('/'): curr = curr[name]
-    assert type(curr) is dict, f'{path}: no such directory exists'
+    def __init__(self):
+        self.pwd =  MetaData.root
 
-    return curr
 
-def create_(curr, name, isdir):
+   # low level functions
 
-    if name in metas: return
+    def list_(curr):
+        return [ name for name in curr if name not in metas ]
 
-    curr[name] = {
-        '~': dir_(curr, '~'), 
-        '.': curr,
+    def path_(curr):
         
-    } if isdir else [] 
+        if curr['.'] is None: return '~'
 
-def dealloc_(name, curr):
+        for name in curr['.']:
+            if curr['.'][name] is curr:
+                return View.path_(curr['.']) + f'/{name}'
 
-    if type(curr) is list:
-        voids.extend(curr)
-        return
+    def dir_(curr, path):
 
-    for name in list_(curr): dealloc_(name, curr[name])
+        for name in path.split('/'): curr = curr[name]
+        assert type(curr) is dict, f'{path}: no such directory exists'
 
-def tree_(curr, depth= 1):
-    r = ''
-    if type(curr) is list: return f': {curr}' 
+        return curr
 
-    for name in list_(curr):
-        r += f'\n{ "   "*depth }{ name }'    
-        r += tree_(curr[name], depth+1)
+    def create_(curr, name, isdir):
 
-    return r
+        if name in MetaData.metas: return
 
+        curr[name] = {
+            '~': View.dir_(curr, '~'), 
+            '.': curr,
+            
+        } if isdir else [] 
 
-# thread function
-def handle_client(client):
+    def dealloc_(name, curr):
 
-    pwd   = metaData[1]
+        if type(curr) is list:
+            MetaData.holes.extend(curr)
+            return
 
+        for name in View.list_(curr): View.dealloc_(name, curr[name])
 
-    # system functions
+    def tree_(curr, depth= 1):
+        r = ''
+        if type(curr) is list: return f': {curr}' 
+
+        for name in View.list_(curr):
+            r += f'\n{ "   "*depth }{ name }'    
+            r += View.tree_(curr[name], depth+1)
+
+        return r
+
 
     def quit():
         save(); client.close(); exit()
@@ -132,54 +134,53 @@ def handle_client(client):
             quit                        exit the file system
             '''
 
-    def chdir(path):
-        nonlocal pwd
+    def chdir(self, path):
 
-        curr = dir_(pwd, path)
+        curr = View.dir_(self.pwd, path)
         pwd = curr
 
         return ''
 
-    def create1(name):
-        create_(pwd, name, False)
+    def create1(self, name):
+        View.create_(self.pwd, name, False)
         return ''
 
-    def create2(name):
-        create_(pwd, name, True)
+    def create2(self, name):
+        View.create_(self.pwd, name, True)
         return ''
 
-    def move(name, path):                   # assert statement
+    def move(self, name, path):                   # assert statement
         
-        curr = dir_(pwd, path)
-        assert name in pwd, f'{name}: no such directory'
-        curr[name] = pwd[name]
-        del pwd[name]
+        curr = View.dir_(self.pwd, path)
+        assert name in self.pwd, f'{name}: no such directory'
+        curr[name] = self.pwd[name]
+        del self.pwd[name]
 
         return ''
 
-    def delete(name):                       # assert statement
+    def delete(self, name):                       # assert statement
 
-        assert name in pwd, f'{name}: no such directory'
-        dealloc_(name, pwd[name])
-        del pwd[name]
+        assert name in self.pwd, f'{name}: no such directory'
+        View.dealloc_(name, self.pwd[name])
+        del self.pwd[name]
 
         return ''
 
-    def tree():
-        return '~' + tree_(dir_(pwd, '~'))
+    def tree(self):
+        return '~' + View.tree_(View.dir_(self.pwd, '~'))
 
-    def path():
-        return path_(pwd)
+    def path(self):
+        return View.path_(self.pwd)
 
-    def lis():
-        return '   '.join(list_(pwd))
+    def lis(self):
+        return '   '.join(View.list_(self.pwd))
 
     def read(path, start= 0, size= -1):
 
         start = int(start)
         size  = int(size)
         
-        f = File(path)
+        f = View.File(path)
         f.seek(start)
         r = f'\n> {f.read(size)} \n'
         f.close()
@@ -190,7 +191,7 @@ def handle_client(client):
 
         at = int(at)
 
-        f = File(path)
+        f = View.File(path)
         f.seek(at)
         f.write(data)
         f.close()
@@ -201,15 +202,12 @@ def handle_client(client):
 
         at = int(at)
 
-        f = File(path)
+        f = View.File(path)
         f.seek(at)
         f.write(data, overwrite= False)
         f.close()
 
         return ''
-
-
-    # file class 
 
     class File():
 
@@ -325,72 +323,23 @@ def handle_client(client):
         'help'  : help,
     }
 
-
-
-    username = client.recv(100).decode()
-
-    while True:
-
-        command = client.recv(100).decode()
-        if not command: break
-
-        stmt    = command.replace('\n', '').split(' ')
-        case    = stmt[0]
-        args    = stmt[1:]
-
-
-        if case in switch: 
-            with lock: 
-                try: 
-                    r = switch[case](*args); save()
-                except Exception as e:
-                    client.send(' '.encode())
-                    continue
-
-        else:
-            r = f'{case}: command not found'
-
-        r = ' ' if not r else r
-        
-        client.send(r.encode())
-
-    with lock: save()
-
-    del threads[client]
+    pass
 
 
 
-def main():
-
-    init()
-
-    global threads, lock
-
-    threads = {}
-    lock = threading.Lock()
-
-    PORT = 1095
-    IP   = sc.gethostname()
-    ADDR = IP, PORT
-
-    main = sc.socket()
-    main.bind(ADDR)
-    main.listen()
-
-    while True:
-        try:
-            client, _ = main.accept()
-
-            threads[client] = threading.Thread(target= handle_client, args= (client,))
-            threads[client].start()
 
 
-        except Exception as e:
-            main.close()
-            save()
-            exit()
 
 
-if __name__ == '__main__':
 
-    main()
+class MyClass():
+
+    classVar = 'it works'
+
+    @staticmethod
+    def myFunction():
+        print(classVar)
+
+    myFunction.__func__()
+    
+    
