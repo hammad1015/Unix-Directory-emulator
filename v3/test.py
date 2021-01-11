@@ -22,9 +22,9 @@ class MetaData():
             {'.': None,}
         ]
         data[1]['~'] = data[1]
-        SSD = open('sample.data', 'wb+')
-        SSD.write(pickle.dumps(data))
-        SSD.close()
+
+        with open('sample.data', 'wb+') as SSD: 
+            SSD.write(pickle.dumps(data))
 
 
     # loading directory structure
@@ -58,7 +58,7 @@ class View():
    # low level functions
 
     def list_(curr):
-        return [ name for name in curr if name not in metas ]
+        return [ name for name in curr if name not in View.metas ]
 
     def path_(curr):
         
@@ -105,7 +105,8 @@ class View():
 
 
     def quit():
-        save(); client.close(); exit()
+        # MetaData.save()
+        pass
 
     def help():
         return '''
@@ -134,10 +135,14 @@ class View():
             quit                        exit the file system
             '''
 
+    def file(self):
+
+        pass
+
     def chdir(self, path):
 
-        curr = View.dir_(self.pwd, path)
-        pwd = curr
+        for name in path.split('/'): 
+            self.pwd = self.pwd[name]
 
         return ''
 
@@ -151,18 +156,33 @@ class View():
 
     def move(self, name, path):                   # assert statement
         
-        curr = View.dir_(self.pwd, path)
-        assert name in self.pwd, f'{name}: no such directory'
-        curr[name] = self.pwd[name]
-        del self.pwd[name]
+        tmp = self.pwd
+
+        self.chdir(path)
+        self.pwd[name] = tmp[name]; del tmp[name]
+        self.pwd = tmp 
+
+        # curr = View.dir_(self.pwd, path)
+        # assert name in self.pwd, f'{name}: no such directory'
+        # curr[name] = self.pwd[name]
+        # del self.pwd[name]
 
         return ''
 
     def delete(self, name):                       # assert statement
 
-        assert name in self.pwd, f'{name}: no such directory'
-        View.dealloc_(name, self.pwd[name])
-        del self.pwd[name]
+        stk = [self.pwd[name]]
+        tmp = []
+        while stk:
+
+            curr = stk.pop()
+            if type(curr) is list: 
+                tmp.extend(curr)
+                continue
+
+            stk.extend(curr.values())
+
+        View.holes.extend(tmp)
 
         return ''
 
@@ -173,7 +193,7 @@ class View():
         return View.path_(self.pwd)
 
     def lis(self):
-        return '   '.join(View.list_(self.pwd))
+        return '   '.join([ n for n in self.pwd if n != '.']) # View.list_(self.pwd))
 
     def read(path, start= 0, size= -1):
 

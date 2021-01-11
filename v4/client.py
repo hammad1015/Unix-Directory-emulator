@@ -1,5 +1,7 @@
 import socket as sc
 
+pkt_size = 2**10
+
 PORT = 1095
 # IP   = sc.gethostname()
 IP   = input('Please enter server IP: ')
@@ -23,10 +25,10 @@ while True:
     
     soc.send(inp)
 
-    out = soc.recv(100).decode()
+    out = soc.recv(pkt_size).decode()
     if not out: break
 
-    print(out)
+    if out != ' ': print(out)
 
 
 print('''

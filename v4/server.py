@@ -6,31 +6,10 @@ import socket as sc
 
 
 # initialization code
-def init():
-    global maxMetaDataSize, metaData, SSD, voids, pwd, metas, lock
 
-    maxMetaDataSize = 2**10
 
-    # loading directory structure
-    if os.path.exists('sample.data'):
-        SSD      = open('sample.data', 'rb+')
-        metaData = pickle.loads(SSD.read(maxMetaDataSize))
-    else:
-        SSD      = open('sample.data', 'wb+')
-        metaData = {
-            0: [],
-            1: {
-                '.': None,
-            }
-        }
-        metaData[1]['~'] = metaData[1]
-        save()
-        
-    # setting root and present working directory
-    voids = metaData[0]
-    pwd   = metaData[1]
-    metas = ('~', '.')
-    lock  = threading.Lock()
+
+maxMetaDataSize = 2**10
 
 # code for serialization and saving
 def save():
@@ -40,6 +19,27 @@ def save():
     SSD.seek(0)
     SSD.write(pickle.dumps(metaData))
     SSD.seek(maxMetaDataSize)
+
+# initializing directory structure
+if not os.path.exists('sample.data'):
+    SSD      = open('sample.data', 'wb+')
+    metaData = [
+        [],
+        {'.': None,}
+    ]
+    metaData[1]['~'] = metaData[1]
+    save()
+    
+# loading directory structure
+SSD      = open('sample.data', 'rb+')
+metaData = pickle.loads(SSD.read(maxMetaDataSize))
+
+# setting root and present working directory
+voids = metaData[0]
+pwd   = metaData[1]
+metas = {'~', '.'}
+lock  = threading.Lock()
+
 
 
 
@@ -60,14 +60,17 @@ def path_(curr):
 
 def dir_(curr, path):
 
-    for name in path.split('/'): curr = curr[name]
+    for name in path.split('/'): 
+        assert name in curr, f'{name}: : no such directory exists'
+        curr = curr[name]
+        
     assert type(curr) is dict, f'{path}: no such directory exists'
 
     return curr
 
 def create_(curr, name, isdir):
 
-    if name in metas: return
+    assert not name in metas, f'{name}: improper filename'
 
     curr[name] = {
         '~': dir_(curr, '~'), 
@@ -84,11 +87,13 @@ def dealloc_(name, curr):
     for name in list_(curr): dealloc_(name, curr[name])
 
 def tree_(curr, depth= 1):
+    
     r = ''
-    if type(curr) is list: return f': {curr}' 
+    if type(curr) is list: 
+        return f': {curr}' 
 
     for name in list_(curr):
-        r += f'\n{ "   "*depth }{ name }'    
+        r += f"\n{ '    '*depth }{ name }"
         r += tree_(curr[name], depth+1)
 
     return r
@@ -141,11 +146,11 @@ def handle_client(client):
         return ''
 
     def create1(name):
-        create_(pwd, name, False)
+        create_(pwd, name, isdir= False)
         return ''
 
     def create2(name):
-        create_(pwd, name, True)
+        create_(pwd, name, isdir= True)
         return ''
 
     def move(name, path):                   # assert statement
@@ -331,7 +336,7 @@ def handle_client(client):
 
     while True:
 
-        command = client.recv(100).decode()
+        command = client.recv(pkt_size).decode()
         if not command: break
 
         stmt    = command.replace('\n', '').split(' ')
@@ -339,16 +344,14 @@ def handle_client(client):
         args    = stmt[1:]
 
 
-        if case in switch: 
-            with lock: 
-                try: 
-                    r = switch[case](*args); save()
-                except Exception as e:
-                    client.send('error\n'.encode())
-                    continue
 
-        else:
-            r = f'{case}: command not found'
+        with lock: 
+            try: 
+                r = switch[case](*args)
+            except AssertionError as e  : r = f'{ e }'
+            except KeyError             : r = 'command not found'
+            except TypeError            : r = 'improper parameters'
+            except Exception            : r = 'unknown error'
 
         r = ' ' if not r else r
         
@@ -360,38 +363,28 @@ def handle_client(client):
 
 
 
-def main():
 
-    init()
+threads = {}
 
-    global threads, lock
+pkt_size = 2**10
 
-    threads = {}
-    lock = threading.Lock()
+PORT = 1095
+IP   = sc.gethostname(); print(f'server IP address: {IP}')
+ADDR = IP, PORT
 
-    PORT = 1095
-    # IP   = sc.gethostname()
-    IP   = '192.168.10.17'
-    ADDR = IP, PORT
+main = sc.socket()
+main.bind(ADDR)
+main.listen()
 
-    main = sc.socket()
-    main.bind(ADDR)
-    main.listen()
+while True:
+    try:
+        client, _ = main.accept()
 
-    while True:
-        try:
-            client, _ = main.accept()
-
-            threads[client] = threading.Thread(target= handle_client, args= (client,))
-            threads[client].start()
+        threads[client] = threading.Thread(target= handle_client, args= (client,))
+        threads[client].start()
 
 
-        except Exception as e:
-            main.close()
-            save()
-            exit()
-
-
-if __name__ == '__main__':
-
-    main()
+    except Exception as e:
+        main.close()
+        save()
+        exit()
